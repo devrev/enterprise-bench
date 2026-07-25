@@ -102,7 +102,7 @@ digest = "sha256:378878fdafc7e7a1a3c05ca04b1463f5fc51404cd54eefa72fc819fe11179f3
 
 [[files]]
 path = "pyproject.toml"
-digest = "sha256:8c7df065dd14b320d980656184e751b2fd4ffa710a8bb3a46736115e33207a79"
+digest = "sha256:046cac5ee4f87690904165f948be2cdc7b3717b6976098976d444e746401fa86"
 
 [[files]]
 path = "mcp.json"
@@ -110,5 +110,4 @@ digest = "sha256:3836353a5f1e64ef77fcd1e0018e9bfde1858cadad97be223885294aea16280
 
 [[files]]
 path = "SKILL.md"
-digest = "sha256:7abd5ed0fb0808c742a7b1d0fa40f4113d5c2469e9bc9666544034c6a2abe1b8"
-
+digest = "sha256:72a697aa31c810f42715d38093723055d33f86896d94a0b3cc0e4878fddd6c2b"
