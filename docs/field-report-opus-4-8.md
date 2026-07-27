@@ -66,6 +66,12 @@ harbor run -p tasks/eng-l1-a -a claude-code -m claude-opus-4-8 \
   --mcp-config mcp.json $AE -k 9 -n 2 -r 0 --yes
 ```
 
+Both keys are needed in *two* places, which is easy to get half-right: exported in the shell,
+where harbor's `[verifier.env]` phase reads them, **and** passed with `--ae`, which is what reaches
+the agent inside its container. Supplying only `--ae` aborts the run before any trial starts with
+`Missing Environment Variables: OPENAI_API_KEY [verifier.env]`. The Makefile satisfies both — the
+`ifndef` guards at `Makefile:109-115` and `AGENT_ENV_ARGS` at `Makefile:28-30`.
+
 `make build-image` must have run at least once, and the image must still be present. If
 `enterprise-bench/conversational-base:latest` has been pruned, Docker falls through to a registry
 pull and every trial dies in seconds with `pull access denied` — see
@@ -220,6 +226,9 @@ Two things are wrong here.
 **The same five trials are counted as both completed and errored.** `n_completed_trials` and
 `n_errored_trials` each report 5 against `n_total_trials: 5`. This is §1 in its clearest form —
 no billing failure required to reproduce it.
+
+Verified twice, on `claude-opus-5` and `claude-opus-4-8`, in separate jobs: identical counters
+both times, 8-10s runtime, `cost_usd: null`.
 
 **`pass_at_k` is populated from zero trials.** `n_trials` is 0 and `cost_usd` is null, yet the
 eval block still emits pass@2, pass@4 and pass@5 as hard `0.0`. A total infrastructure failure is
