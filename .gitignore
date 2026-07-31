@@ -10,7 +10,6 @@ venv/
 
 # Harbor run outputs
 jobs/
-jobs-*/
 runs/
 results/
 
