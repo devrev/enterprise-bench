@@ -99,7 +99,7 @@ digest = "sha256:828662a879b7d2702dbde80ae83570b5a7cb59c48c3577a04a26c44bb9deff2
 
 [[files]]
 path = "Makefile"
-digest = "sha256:378878fdafc7e7a1a3c05ca04b1463f5fc51404cd54eefa72fc819fe11179f3f"
+digest = "sha256:a421f8194f46cf719258f18698a13a5fb10c8e4a5703ad9540c4390022f5a8b6"
 
 [[files]]
 path = "pyproject.toml"

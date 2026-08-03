@@ -25,7 +25,6 @@ truth. Run via `make validate-leaderboard` or as part of `make validate`.
 from __future__ import annotations
 
 import re
-import sys
 from pathlib import Path
 from typing import Any
 
