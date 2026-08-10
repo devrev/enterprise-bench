@@ -15,6 +15,10 @@ interface differs** between arms.
   (in this directory — kept here rather than under `mcp-servers/` because that path is a
   regenerated-archive directory and gitignored; folding ops-context into that pipeline is a
   maintainer option I'm happy to implement).
+- **`ops-context/dsl/`** — the analytic governed views are now **generated from the derived schema
+  by a small DSL, not hand-written**: `revenue_at_risk_by_grain` (+ additive roll-up), `threshold_breach`,
+  and a real scanner for the derived linkage map (replacing the former hand-authored one). Vendored,
+  Apache-2.0, dependency-free; answer-equivalence proven in `ops-context/dsl/verify.py`. See its README.
 
 ## Run it
 

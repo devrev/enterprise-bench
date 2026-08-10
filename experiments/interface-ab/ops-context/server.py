@@ -19,6 +19,7 @@ Env: DATA_DIR (default /data) · MCP_PORT (default 8014)
 import datetime
 import json
 import os
+import sys
 from pathlib import Path
 
 from fastmcp import FastMCP
@@ -43,6 +44,12 @@ TICKETS = _load("crm_json_data/tickets.json")
 OPPS = _load("crm_json_data/opportunities.json")
 ISSUES = _load("pm_json_data/issues.json")
 PARTS = {p["part_id"]: p for p in _load("pm_json_data/maple_parts.json")}
+
+# The analytic governed views (the cross-system joins + aggregations) are GENERATED from the derived
+# schema by a small DSL, not hand-written — see dsl/ (vendored floormap engine) and dsl/views.py.
+# Answer-equivalence to the former hand-written views is proven in dsl/verify.py.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from dsl import views as _dsl_views
 
 OPEN = ("open", "in_progress")
 
@@ -97,43 +104,9 @@ derived_tool = register_if("derived")  # ablation arm: Tier-A/B content only
     "overdue, and breach status. Tickets on no-SLA tiers are excluded from the breach set and "
     "reported in the exclusions list. Includes a context fingerprint."))
 def ops_open_p1_sla_status(reference_date: str = DEFAULT_REF) -> str:
-    ref = _ref(reference_date)
-    rows, excluded = [], []
-    for t in TICKETS:
-        if t["priority"] != "p1" or t["status"] not in OPEN:
-            continue
-        a = ACCOUNTS[t["account_id"]]
-        thr = SLA_HOURS.get(a.get("tier"))
-        age_h = _age_hours(t["created_at"], ref)
-        base = {
-            "ticket_id": t["ticket_id"], "subject": t["subject"], "status": t["status"],
-            "account_id": a["account_id"], "account_name": a["account_name"],
-            "account_tier": a.get("tier"), "arr": a.get("arr"),
-            "age_days": round(age_h / 24, 1), "components": t.get("components", []),
-        }
-        if thr is None:
-            excluded.append({**base, "reason": "account tier has no formal SLA (Starter)"})
-            continue
-        rows.append({**base, "sla_first_response_hours": thr,
-                     "hours_overdue": round(age_h - thr, 1), "breached": age_h > thr,
-                     "created_after_reference": age_h < 0})
-    rows.sort(key=lambda r: -r["hours_overdue"])
-    return json.dumps({
-        "reference_date": reference_date,
-        "breaches": [r for r in rows if r["breached"]],
-        "not_breached_or_after_reference": [r for r in rows if not r["breached"]],
-        "excluded_no_sla": excluded,
-        "sla_source": "MSA tier documents (Enterprise: 30 min P1 first response; "
-                      "Growth: 2 hrs; Starter: none)",
-        "context_fingerprint": _fingerprint(
-            records={"tickets": [r["ticket_id"] for r in rows + excluded],
-                     "accounts": sorted({r["account_id"] for r in rows + excluded})},
-            documents=MSA_DOCS,
-            exclusions=[{"what": "resolved/closed and non-P1 tickets",
-                         "reason": "not in scope of the view"},
-                        {"what": f"{len(excluded)} open P1 tickets on Starter-tier accounts",
-                         "reason": "no formal SLA in MSA"}],
-            reference_date=reference_date)}, indent=1)
+    # GENERATED: threshold_breach classified by account tier (dsl/views.py). The join + age math are
+    # generated from the derived schema; the SLA thresholds + MSA docs are the binding Tier-1.5 config.
+    return _dsl_views.open_p1_sla_status(str(DATA_DIR), reference_date)
 
 
 @governed_tool(description=(
@@ -141,33 +114,10 @@ def ops_open_p1_sla_status(reference_date: str = DEFAULT_REF) -> str:
     "tickets, joined through the component -> product-part hierarchy (features rolled up to "
     "areas). Notes multi-area double-counting explicitly. Includes a context fingerprint."))
 def ops_arr_at_risk_by_area() -> str:
-    per_area, tickets_used = {}, []
-    for t in TICKETS:
-        if t["priority"] in ("p0", "p1") and t["status"] in OPEN:
-            tickets_used.append(t["ticket_id"])
-            for c in t.get("components", []):
-                area = _area(c)
-                per_area.setdefault(area, {"accounts": set(), "tickets": []})
-                per_area[area]["accounts"].add(t["account_id"])
-                per_area[area]["tickets"].append(t["ticket_id"])
-    ranked = sorted(({
-        "product_area": k,
-        "arr_at_risk": sum(ACCOUNTS[a]["arr"] for a in v["accounts"]),
-        "distinct_accounts": len(v["accounts"]),
-        "account_names": sorted(ACCOUNTS[a]["account_name"] for a in v["accounts"]),
-        "ticket_count": len(v["tickets"]),
-    } for k, v in per_area.items()), key=lambda r: -r["arr_at_risk"])
-    return json.dumps({
-        "method": "component-based join via part hierarchy; an account's ARR counts in every "
-                  "area where it has an open P0/P1 ticket, so columns do not sum to unique ARR",
-        "ranking": ranked,
-        "context_fingerprint": _fingerprint(
-            records={"tickets": tickets_used,
-                     "accounts": sorted({a for v in per_area.values() for a in v["accounts"]}),
-                     "parts": sorted(PARTS.keys())},
-            exclusions=[{"what": "tickets not open/in_progress or below P1",
-                         "reason": "out of scope"}])},
-        indent=1)
+    # GENERATED: revenue_at_risk_by_grain over the tagged part, additively rolled up to product_area
+    # (dsl/views.py). The component->part join and the account-deduped ARR sum are generated; the
+    # finest (tagged-part) grain is retained. Per-account detail is available via ops_account_360.
+    return _dsl_views.arr_at_risk_by_area(str(DATA_DIR))
 
 
 @governed_tool(description=(
@@ -255,43 +205,11 @@ def ops_msa_sla_terms() -> str:
     "of the systems themselves — contains only what a scanner can observe, no business "
     "interpretation. Read this first when a question spans more than one system."))
 def ops_linkage_map_derived() -> str:
-    # Everything below is limited to what schema introspection + value sampling can emit.
-    tk_status = sorted({t["status"] for t in TICKETS})
-    tk_prio = sorted({t["priority"] for t in TICKETS})
-    acct_tiers = sorted({a.get("tier") for a in ACCOUNTS.values() if a.get("tier")})
-    return json.dumps({
-        "derivation": "schema describe + ID-pattern sampling + value inventory; no human input",
-        "entities": {
-            "accounts":      {"system": "CRM", "key": "account_id", "salesforce_object": "Account"},
-            "tickets":       {"system": "CRM", "key": "ticket_id", "salesforce_object": "Case"},
-            "opportunities": {"system": "CRM", "key": "opportunity_id",
-                              "salesforce_object": "Opportunity"},
-            "issues":        {"system": "PM", "key": "issue_id"},
-            "parts":         {"system": "PM", "key": "part_id"},
-        },
-        "observed_references": [
-            {"field": "tickets.account_id",
-             "matches": "accounts.account_id (100% of sampled values)"},
-            {"field": "opportunities.account_id", "matches": "accounts.account_id (100%)"},
-            {"field": "tickets.components[]", "matches": "parts.part_id (100%)"},
-            {"field": "issues.components[]", "matches": "parts.part_id (100%)"},
-            {"field": "parts.parent_id",
-             "matches": "parts.part_id (hierarchy: types product > product_area > feature)"},
-        ],
-        "schema_bridges": {
-            "note": "CRM facade is Salesforce-style; JSON fields map to __c custom fields",
-            "examples": {"arr": "AnnualRecurringRevenue__c", "tier": "Tier__c",
-                         "components": "Components__c", "account_name": "Name"},
-        },
-        "observed_value_inventories": {
-            "tickets.status": tk_status,
-            "tickets.priority": tk_prio,
-            "accounts.tier": acct_tiers,
-        },
-        "document_store_files": sorted(f.name for f in (DATA_DIR / "internal_docs").iterdir()),
-        "context_fingerprint": _fingerprint(
-            documents=[{"id": "ops-context/linkage-map-derived", "authority": "process"}]),
-    }, indent=1)
+    # GENERATED by the scanner (dsl/scan.py): primary-key inference + value-set-overlap FK detection
+    # (scalar and array-valued) + self-referential hierarchy + junction detection, over the data
+    # alone. This REPLACES the former hand-authored map with genuinely derived topology — the honest
+    # version of "no human input" (the previous map's entities/references were hand-written).
+    return _dsl_views.linkage_map_derived(str(DATA_DIR))
 
 
 @linkage_tool(description=(
