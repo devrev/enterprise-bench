@@ -11,7 +11,14 @@ import tomllib
 import zipfile
 from pathlib import Path
 
-import yaml
+try:
+    import yaml
+except ImportError:
+    sys.exit(
+        "Error: 'pyyaml' dependency missing. Install with 'pip install pyyaml' "
+        "or run via 'uv run python scripts/validate_repo.py'."
+    )
+
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 # Canary constants (GUID + required-file list) live in scripts/canary.py so the
