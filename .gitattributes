@@ -1,0 +1,14 @@
+# Force LF line endings for files whose bytes are content-verified by
+# scripts/validate_repo.py against a sha256 digest recorded in dataset.toml.
+# Without this, a Windows checkout with core.autocrlf=true rewrites these
+# files to CRLF, changing their on-disk bytes (and thus their digest) with
+# no actual content change, producing a spurious "digest mismatch" on every
+# `make validate` run. See PR discussion for the repro.
+Makefile text eol=lf
+pyproject.toml text eol=lf
+mcp.json text eol=lf
+SKILL.md text eol=lf
+
+# Task test scripts must keep LF endings; CRLF would break the
+# `#!/bin/bash` shebang inside the Linux task containers.
+tasks/**/tests/test.sh text eol=lf

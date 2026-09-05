@@ -53,9 +53,15 @@ install: ## Install Python dependencies (requires uv)
 	@echo "✓ Dependencies installed"
 
 validate: ## Validate docs, task structure, manifests, and linting
-	uv sync --extra dev
-	uv run ruff check .
-	uv run python scripts/validate_repo.py
+	# Uses ephemeral `uv run --no-project` environments instead of `uv sync
+	# --extra dev` so this doesn't require resolving/building the full
+	# project dependency tree (harbor, litellm, boto3, ...) just to lint and
+	# check file structure. On some platforms litellm's optional Rust
+	# extension has no prebuilt wheel and fails to compile without a
+	# Rust/MSVC toolchain, which otherwise blocks `make validate` for a
+	# check that never imports litellm or harbor in the first place.
+	uv run --no-project --with ruff -- ruff check .
+	uv run --no-project --with pyyaml -- python scripts/validate_repo.py
 
 validate-leaderboard: ## Validate leaderboard submission entries (run for leaderboard PRs)
 	uv sync --extra dev
