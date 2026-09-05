@@ -20,3 +20,5 @@ jobs:
         run: uv sync --extra dev --frozen
       - name: Validate repository
         run: make validate
+      - name: Validate Klaatu recipe (no model calls)
+        run: uv run pytest scripts/test_klaatu_recipe.py -q
