@@ -21,7 +21,7 @@ problems you will actually hit along the way.
 > ```bash
 > harbor download enterprise-bench/l1-l2-bench -o ./enterprise-bench
 > cd enterprise-bench/l1-l2-bench
-> make install            # BEFORE make setup — see Gotcha 1
+> make install
 > make setup              # extract artifacts/data.zip / artifacts/base-image.zip / artifacts/mcp-servers.zip
 > make build-image        # builds enterprise-bench/conversational-base:latest LOCALLY
 > make start-servers      # 6 containers: REST 9001-9003 + MCP 8011-8013
@@ -82,11 +82,12 @@ cd enterprise-bench/l1-l2-bench
 You get 14 task dirs (5 eng, 5 sales, 4 support) plus `Makefile`, `mcp.json`,
 `pyproject.toml`, and three zips in `artifacts/` (`data.zip`, `base-image.zip`, `mcp-servers.zip`).
 
-### 3. Install Python deps — **do this BEFORE `make setup`**
+### 3. Install Python deps
 ```bash
 make install               # uv sync
 ```
-See **[Gotcha 1](#gotcha-1-make-install-breaks-after-make-setup)** — order matters.
+Order relative to `make setup` no longer matters — see
+**[Gotcha 1](#gotcha-1-make-install-breaks-after-make-setup-historical)**.
 
 ### 4. Extract the archives
 ```bash
@@ -200,12 +201,16 @@ judge calls.
 
 These are real issues found running the documented flow. Some need a local patch.
 
-### Gotcha 1: `make install` breaks after `make setup`
+### Gotcha 1: `make install` breaks after `make setup` (historical)
+**Status:** fixed — `pyproject.toml` now pins `[tool.setuptools] py-modules = []`,
+so `make install` works regardless of whether `make setup` already ran. Verified:
+running `make setup` (creating `data/`, `images/`, `mcp-servers/`) and then
+`make install` no longer reproduces the symptom below. Kept here for anyone
+troubleshooting an older checkout without this fix.
 **Symptom:** `error: Multiple top-level packages discovered in a flat-layout: ['data', 'images']`
-**Cause:** `pyproject.toml` uses setuptools flat-layout auto-discovery with no package
+**Cause:** `pyproject.toml` used setuptools flat-layout auto-discovery with no package
 config; once `make setup` creates `data/` and `images/`, they look like stray packages.
-**Fix:** run `make install` **before** `make setup`. (Permanent fix: add explicit
-package config to `pyproject.toml`, e.g. `[tool.setuptools] py-modules = []`.)
+**Workaround (if you hit this on an old checkout):** run `make install` **before** `make setup`.
 
 ### Gotcha 2: "pull access denied" on the base image
 **Symptom:** `docker.io/enterprise-bench/conversational-base:latest: pull access denied
