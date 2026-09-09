@@ -1,0 +1,6 @@
+mcp>=1.0.0
+fastmcp>=2.3.0
+# python:3.12-slim ships no system tzdata, so zoneinfo cannot resolve Europe/London
+# without this. Bare dates in a query are interpreted in that zone (see
+# gmail-mcp-server.md 1.6); without tzdata every one of them would silently shift.
+tzdata>=2024.1

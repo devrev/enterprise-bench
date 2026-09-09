@@ -1,0 +1,8 @@
+mcp>=1.0.0
+fastmcp>=2.3.0
+# python:3.12-slim ships no system tzdata, so zoneinfo cannot resolve Europe/London -
+# and this server resolves EVERY stored timestamp through a named zone, not just the
+# occasional bare date. Without tzdata the load fails outright rather than degrading:
+# see gcal-mcp-server.md 1.2. Two events are authored in Asia/Singapore and
+# America/New_York, so the tzdata dependency is load-bearing beyond the default zone.
+tzdata>=2024.1
