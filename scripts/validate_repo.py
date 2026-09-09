@@ -178,11 +178,20 @@ def main() -> int:
 
     dataset_tasks = load_dataset_tasks(errors)
     search_root = TASKS_ROOT if TASKS_ROOT.exists() else ROOT
-    task_dirs = [
-        p
-        for p in search_root.iterdir()
-        if (p / "task.toml").exists() and p.name not in IGNORED_TASK_DIRS
-    ]
+    # Mirrors harbor's own `expand_task_path`: a task dir (has task.toml) is
+    # taken as-is; any other directory one level down is treated as a group
+    # of tasks (e.g. tasks/uk/) and its immediate task-dir children are
+    # included too. This does not recurse further.
+    task_dirs: list[Path] = []
+    for p in search_root.iterdir():
+        if p.name in IGNORED_TASK_DIRS or not p.is_dir():
+            continue
+        if (p / "task.toml").exists():
+            task_dirs.append(p)
+        else:
+            task_dirs.extend(
+                child for child in p.iterdir() if child.is_dir() and (child / "task.toml").exists()
+            )
 
     if not task_dirs:
         fail(errors, "no task directories found")
