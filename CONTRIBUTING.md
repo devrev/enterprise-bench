@@ -90,9 +90,10 @@ Rules:
   object-root JSON.
 - Synthetic data under `data/`: leave record-array JSON unmodified (no place for
   a canary key) and keep the `data/CANARY.md` sidecar (also packed as
-  `CANARY.md` inside `artifacts/data.zip`). Builders are asked — as an extra
-  request beyond the usual per-document filter — to exclude the whole directory
-  when that sidecar is present; see `CANARY.md`.
+  `CANARY.md` inside `artifacts/data.zip`). When `data/` is present,
+  `make validate` requires the canary in every other file under it. Builders
+  are asked — as an extra request beyond the usual per-document filter — to
+  exclude the whole directory when that sidecar is present; see `CANARY.md`.
 - The GUID is permanent. Do not change it — that would break detection for all
   previously published data.
 

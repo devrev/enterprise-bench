@@ -127,7 +127,7 @@ digest = "sha256:cff2322ec467e7483b20e6cf7b1f60f02254d0b4c95574810f807dd2e463e77
 
 [[files]]
 path = "artifacts/data.zip"
-digest = "sha256:77f7f0923d038b489e671059a5b5df64f595d8d3f6f1e2ce6e7706ea7d07edb3"
+digest = "sha256:e53ba300ffb09df848b63ccfe0b781c89e49ec8f3d0cf6adef400409923a0f27"
 
 [[files]]
 path = "artifacts/base-image.zip"
@@ -151,4 +151,4 @@ digest = "sha256:1cadfb42a6ca7b4ec405e379a2e60cc1a01135f5140b22c3bd027e926880f4f
 
 [[files]]
 path = "SKILL.md"
-digest = "sha256:7abd5ed0fb0808c742a7b1d0fa40f4113d5c2469e9bc9666544034c6a2abe1b8"
+digest = "sha256:4bce9e537aae6a382b46889eb7d1e233cf3da26952b841e0c2ddb5d8be8d4390"
