@@ -10,8 +10,10 @@ only what is expressed in the committed files:
                                  and a matching public Harbor Hub job URL.
   2. Trials are complete      -> n_trials == len(trial_ids), no placeholders,
                                  no duplicates within a file or across files.
-  3. Agent / provider / model -> all four metadata fields present and filled
-     fields are filled           (not left as the row-template placeholders).
+  3. Agent / model /          -> all seven metadata fields present and filled
+     provider fields filled      (not left as the row-template placeholders),
+                                 and metadata.run_url matches the Source job
+                                 header UUID.
   4. Metrics conform          -> required metrics present, within the ranges
                                  declared in leaderboard.yaml's metrics_schema,
                                  no unknown keys, and the token breakdown
@@ -42,15 +44,21 @@ JOB_URL_RE = re.compile(
     r"^#\s*(https://hub\.harborframework\.com/jobs/([0-9a-fA-F-]{36}))\s*$",
     re.MULTILINE,
 )
+RUN_URL_RE = re.compile(
+    r"^https://hub\.harborframework\.com/jobs/([0-9a-fA-F-]{36})$"
+)
 UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
                      r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 FILENAME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}__[^_]+(?:[^_]|_(?!_))*__.+\.yaml$")
 
 REQUIRED_METADATA_FIELDS = [
     "agent_display_name",
+    "agent_version",
     "model_display_name",
-    "agent_org_display_name",
     "model_org_display_name",
+    "provider",
+    "run_url",
+    "config_notes",
 ]
 
 # Angle-bracket placeholders from row-template.yaml must be replaced.
@@ -186,7 +194,45 @@ def validate_trials(
             seen_trials[tid] = entry
 
 
-def validate_metadata(errors: list[str], entry: str, row: dict[str, Any]) -> None:
+def validate_run_url(
+    errors: list[str],
+    entry: str,
+    run_url: Any,
+    source_job_uuid: str | None,
+) -> None:
+    """metadata.run_url must be a Harbor Hub job URL matching the Source job header."""
+    if not isinstance(run_url, str) or not run_url.strip():
+        return  # already reported as missing/empty by the field loop
+    if PLACEHOLDER_RE.search(run_url):
+        return  # already reported as placeholder by the field loop
+
+    match = RUN_URL_RE.match(run_url.strip())
+    if not match:
+        fail(
+            errors,
+            entry,
+            "metadata.run_url must be "
+            "'https://hub.harborframework.com/jobs/<uuid>', "
+            f"got {run_url!r}",
+        )
+        return
+
+    run_uuid = match.group(1)
+    if source_job_uuid and run_uuid != source_job_uuid:
+        fail(
+            errors,
+            entry,
+            f"metadata.run_url UUID ({run_uuid}) does not match the "
+            f"Source job UUID ({source_job_uuid})",
+        )
+
+
+def validate_metadata(
+    errors: list[str],
+    entry: str,
+    row: dict[str, Any],
+    source_job_uuid: str | None = None,
+) -> None:
     metadata = row.get("metadata")
     if not isinstance(metadata, dict):
         fail(errors, entry, "metadata block missing")
@@ -198,9 +244,14 @@ def validate_metadata(errors: list[str], entry: str, row: dict[str, Any]) -> Non
         elif isinstance(value, str) and PLACEHOLDER_RE.search(value):
             fail(errors, entry, f"metadata.{field} still has a template placeholder: {value!r}")
 
+    validate_run_url(errors, entry, metadata.get("run_url"), source_job_uuid)
 
-def validate_header(errors: list[str], entry: str, text: str) -> None:
-    """Jobs-are-uploaded: header must declare a job UUID and matching public URL."""
+
+def validate_header(errors: list[str], entry: str, text: str) -> str | None:
+    """Jobs-are-uploaded: header must declare a job UUID and matching public URL.
+
+    Returns the Source job UUID when present, else None.
+    """
     uuid_match = JOB_UUID_RE.search(text)
     url_match = JOB_URL_RE.search(text)
     if not uuid_match:
@@ -219,6 +270,7 @@ def validate_header(errors: list[str], entry: str, text: str) -> None:
             f"Source job UUID ({uuid_match.group(1)}) does not match the "
             f"job URL UUID ({url_match.group(2)})",
         )
+    return uuid_match.group(1) if uuid_match else None
 
 
 def validate_entry(
@@ -238,7 +290,7 @@ def validate_entry(
         )
 
     text = path.read_text()
-    validate_header(errors, entry, text)
+    source_job_uuid = validate_header(errors, entry, text)
 
     try:
         data = yaml.safe_load(text)
@@ -259,7 +311,7 @@ def validate_entry(
         if not isinstance(row, dict):
             fail(errors, entry, "each row must be a mapping")
             continue
-        validate_metadata(errors, entry, row)
+        validate_metadata(errors, entry, row, source_job_uuid)
         validate_metrics(errors, entry, row.get("metrics", {}), schema)
         validate_trials(errors, entry, row, seen_trials)
 
