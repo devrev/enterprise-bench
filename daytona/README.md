@@ -7,7 +7,7 @@ local servers, no custom agent code.
 
 ```text
 operator machine / CI
-  shared_mcp_daytona.py snapshot | deploy | config | revoke | inspect | stop
+  shared_mcp_daytona.py server-snapshot | deploy | config | revoke | inspect | stop
                      │
                      ▼
 server sandbox (private; from snapshot shared-mcp-servers-v2)
@@ -20,44 +20,31 @@ server sandbox (private; from snapshot shared-mcp-servers-v2)
                      ▲
   https://8080-<signed-token>.<proxy-domain>/<route>/mcp
                      │
-  harbor run -c .daytona/job.yaml --mcp-config .daytona/mcp.json
-    └─ trial sandboxes (from snapshot enterprise-bench-task-env-<digest12>)
+  harbor run -e environments.daytona_env:DaytonaEnvironment
+             --mcp-config .daytona/mcp.json
+    └─ trial sandboxes (GHCR conversational-base image per task Dockerfile)
   any other MCP client using the same mcp.json
 ```
 
 | Path | Purpose |
 |---|---|
-| `shared_mcp_daytona.py` | Operator CLI: `snapshot`, `server-snapshot`, `deploy`, `inspect`, `config`, `revoke`, `stop`. Runs locally or in CI. |
+| `shared_mcp_daytona.py` | Operator CLI: `server-snapshot`, `deploy`, `inspect`, `config`, `revoke`, `stop`. Runs locally or in CI. |
 | `shared_mcp_config.py` | Renders `.daytona/mcp.json` from the repo-root `mcp.json` (keys, descriptions, `type: http` kept; only URLs change). |
 | `shared_mcp_smoke.py` | MCP `initialize`, `tools/list` and read-only `crm_describe` through the real URL; `--concurrency N`. |
+| `environments/daytona_env.py` | Harbor environment: GHCR task image + submit API on :8000 for conversational tasks. |
 | `deploy/` | What runs in the server sandbox: `docker-compose.yaml`, `Caddyfile`, `images.env`, `image-lock.json`. Generated, tracked. |
 | `images/` | Build and publish the six server images; render `deploy/` from the image lock. |
 | `tests/`, `images/tests/` | Offline tests (no cloud, Docker or model). |
 
 ## Snapshots
 
-There are two Daytona snapshots, and both names are fixed by what is pinned in
-this repo:
-
 | Snapshot | Used by | Contents | Created by |
 |---|---|---|---|
-| `enterprise-bench-task-env-<digest12>` | every Harbor trial sandbox (where the agent runs) | `artifacts/base-image.zip` built as an image. `<digest12>` is the first 12 hex of that zip's digest in `dataset.toml`. Required: the task Dockerfiles start `FROM enterprise-bench/conversational-base:latest`, which is not on any registry. | `snapshot` |
 | `shared-mcp-servers-v2` | the MCP server sandbox | `docker:28.3.3-dind` plus the `deploy/` files, built from `deploy/Dockerfile` | `server-snapshot` |
 
-To see exactly which task snapshot this checkout uses, and whether it exists:
-
-```bash
-python daytona/shared_mcp_daytona.py snapshot --print
-```
-
-Snapshots stay until deleted, but Daytona deactivates ones that go unused for a
-while. `snapshot`, `config` and `deploy` reactivate an inactive snapshot
-automatically. If it is missing (deleted), `snapshot` rebuilds it from the pinned
-zip. `--print` only reports and exits 1 when the snapshot isn't active.
-
-Each run's `jobs/<job>/config.json` records the snapshot under
-`environment.kwargs.snapshot_template_name`. When `base-image.zip` changes, the
-name changes, so old runs keep pointing at the snapshot they actually used.
+The optional `snapshot` command still builds `enterprise-bench-task-env-<digest12>` from
+`artifacts/base-image.zip` for legacy workflows; **Harbor trials on Daytona should use
+the GHCR conversational-base image** via `DaytonaEnvironment` instead.
 
 ## Harbor run using Daytona
 
@@ -66,45 +53,45 @@ Prerequisites, all in `.env` (copy `.env.template`):
 - `DAYTONA_API_KEY`: Daytona dashboard → Keys
 - `ANTHROPIC_API_KEY`: or the key for whichever agent you run
 - `OPENAI_API_KEY`: LLM judge
+- `GHCR_OWNER`: GitHub user/org that hosts `ghcr.io/<owner>/conversational-base` (or set `EB_CONVERSATIONAL_BASE_IMAGE`)
 
 One-time setup:
 
 ```bash
-make install                  # uv sync: Harbor 0.19 with Daytona support in .venv
-source .venv/bin/activate     # `harbor` and `python` below come from .venv
-python daytona/shared_mcp_daytona.py snapshot   # once per base-image version; no-op after
+make install                  # uv sync: Harbor with Daytona support in .venv
+source .venv/bin/activate
+make setup                    # extracts images/conversational-base/ from artifacts/base-image.zip
+GHCR_OWNER=your-github-user ./daytona/images/build_conversational_base.sh   # push linux/amd64 base
+python daytona/shared_mcp_daytona.py server-snapshot   # once; no-op if already active
+python daytona/shared_mcp_daytona.py deploy \
+  --sandbox-name eb-shared-mcp --manifest .daytona/deployment.json
 ```
 
-Before each run (or every 24 hours), refresh the signed URL. This writes
-`.daytona/mcp.json` and `.daytona/job.yaml` (Daytona environment + task snapshot):
+Before each run (or every 24 hours), refresh the signed MCP URL:
 
 ```bash
 python daytona/shared_mcp_daytona.py config \
   --sandbox-name eb-shared-mcp --output .daytona/mcp.json
 ```
 
-Then run Harbor:
+Then run Harbor (any harness that supports Harbor's environment import path):
 
 ```bash
+export GHCR_OWNER=your-github-user
+
 harbor run \
-  -c .daytona/job.yaml \
+  -e environments.daytona_env:DaytonaEnvironment \
   -p tasks \
-  -a claude-code -m claude-opus-4-8 \
+  -a codex -m gpt-6.1-sol \
   --mcp-config .daytona/mcp.json \
   --env-file .env \
   -k [REPETITIONS] -n [CONCURRENT] --jobs-dir [OUTPUT_DIR] --yes
 ```
 
 - One task: `-p tasks/eng-l1-a`. A subset: `-p tasks -i eng-l1-a -i sales-l1-a`.
-- Any Harbor agent works, e.g. `-a codex -m <model>` or `-a agents.<module>:<Class>`.
-- Keep `--mcp-config` on the command line. With `-c`, Harbor replaces the agent
-  section of the job config whenever `-a` is given (0.19 through 0.24), so
-  `job.yaml` only carries the environment.
-- Without `-c`, the equivalent flags are
-  `-e daytona --ek snapshot_template_name=$(python daytona/shared_mcp_daytona.py snapshot --print | …)`.
-  The job config is simpler.
-- The global `harbor` from `uv tool` (0.17 here) has no Daytona support. Use the
-  `.venv` one, or upgrade it with `uv tool install --upgrade 'harbor[daytona]'`.
+- Task sandboxes pull `ghcr.io/$GHCR_OWNER/conversational-base:latest` (or the image in the task Dockerfile). `DaytonaEnvironment` rewrites `FROM enterprise-bench/conversational-base` to that GHCR ref and starts the submit API on port 8000 (Daytona does not run image ENTRYPOINT).
+- Optional: `EB_CONVERSATIONAL_BASE_IMAGE` (full ref), `CONVERSATIONAL_BASE_TAG` (default `latest`).
+- The global `harbor` from `uv tool` may lack Daytona support. Use the `.venv` binary or `uv tool install 'harbor[daytona]'`.
 
 ## Deploy the MCP servers
 
@@ -170,11 +157,9 @@ gitignored; `deploy` and `config` create it when you write paths under it.
 |---|---|---|
 | `deployment.json` | `deploy --manifest …` | Non-secret record of sandbox id and image digests |
 | `mcp.json` | `config --output …` | Signed MCP URLs for `--mcp-config` |
-| `job.yaml` | `config` (default: next to `mcp.json`) | Harbor `-c`: Daytona task snapshot only |
 
-**One-time (Daytona org):** `snapshot` (task env) → `server-snapshot` (if missing)
-→ `deploy --sandbox-name <MCP_SANDBOX_NAME>`. **Before each run:** `config` →
-`harbor run` with `-c .daytona/job.yaml` and `--mcp-config .daytona/mcp.json`.
+**One-time (Daytona org):** `server-snapshot` (if missing) → `deploy --sandbox-name <MCP_SANDBOX_NAME>`.
+**Before each run:** `config` → `harbor run` with `DaytonaEnvironment` and `--mcp-config .daytona/mcp.json`.
 
 **MCP sandbox stopped or restarted:** run `deploy` again (starts dockerd and the
 stack). `config` alone does not start containers. Then `config` if the signed URL
@@ -188,7 +173,7 @@ expired or before a long run.
 |---|---|
 | `artifacts/data.zip` or `artifacts/mcp-servers.zip` (MCP data/code) | Full **image release** below, then `deploy` on every `<MCP_SANDBOX_NAME>` you use, then `config`. |
 | `daytona/deploy/` only (compose, digests, Caddy) | Commit `deploy/`, `server-snapshot --replace` (optional if sandboxes already exist), `deploy` on each MCP sandbox, `config`. |
-| `artifacts/base-image.zip` (agent trial image) | `python daytona/shared_mcp_daytona.py snapshot` only (new `enterprise-bench-task-env-<digest12>`). Re-run `config` so `job.yaml` picks up the new name. No MCP image rebuild unless data zip also changed. |
+| `artifacts/base-image.zip` (task runtime) | `make setup`, re-run `daytona/images/build_conversational_base.sh`, then re-run trials (Daytona pulls the new GHCR tag). |
 | MCP sandbox stop/start only | `deploy` → `config` (see above). |
 
 ### Image release (data or server code in GHCR images)
@@ -216,43 +201,4 @@ python daytona/shared_mcp_daytona.py deploy \
 python daytona/shared_mcp_daytona.py config \
   --sandbox-name <MCP_SANDBOX_NAME> \
   --output .daytona/mcp.json
-```
-
-Repeat `deploy` + `config` for each extra MCP sandbox (e.g. isolated parallel
-agents). Make new GHCR packages public after their first push (package settings
-→ Danger Zone → Change visibility) so `deploy` can pull without `GHCR_TOKEN`.
-
-- `prepare` stages from the pinned zips and refuses archives that do not match
-  `dataset.toml`.
-- `build --push` needs `docker login ghcr.io` with `write:packages`.
-- `gen_deploy.py` rewrites `deploy/`; `deploy` uploads the current tree to the
-  sandbox and pulls **digests** from `images.env`.
-- `server-snapshot` rebuilds `shared-mcp-servers-v2` from `deploy/Dockerfile`
-  (dind + deploy files only). `deploy` always uploads the latest `deploy/` even
-  if you skip `server-snapshot`.
-
-When `artifacts/base-image.zip` changes, run `snapshot` again; the new task
-snapshot name is derived automatically.
-
-All runs you compare should use the same `deploy/image-lock.json` and task
-snapshot.
-
-## Caveats
-
-- **Signed URLs end up in job outputs.** Harbor records MCP URLs in
-  `jobs/*/config.json`. Revoke the URL, or let it expire, before sharing `jobs/`
-  or uploading traces.
-- **Read-only tasks only.** Mail and Calendar keep writes (drafts, labels, events)
-  in process memory, so on a shared deployment one trial's writes are visible to
-  every other trial. Redeploy between scored runs.
-- **MCP only.** The server images don't include the REST twins (9001-9004).
-- **Snapshots are per Daytona organization.** Another org runs `snapshot` and
-  `server-snapshot` once, then `deploy`. The public images need no token.
-- **Network isolation.** The signed URL protects the servers; it is not the
-  default-deny agent egress policy required before public v2 scoring.
-
-## Tests
-
-```bash
-uv run --extra dev pytest daytona/
 ```

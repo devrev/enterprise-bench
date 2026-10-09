@@ -218,12 +218,11 @@ def test_config_fails_when_stopped(monkeypatch, tmp_path):
     assert rc == 2 and not out.exists()
 
 
-def test_config_writes_job_config_with_task_snapshot(monkeypatch, tmp_path):
+def test_config_does_not_write_job_yaml(monkeypatch, tmp_path):
     rc, out = run_config(monkeypatch, tmp_path, FakeSandbox(manifest={"a": 1}))
-    job = (out.parent / "job.yaml").read_text()
     assert rc == 0
-    assert "type: daytona" in job
-    assert f"snapshot_template_name: {dep.task_snapshot_name()}" in job
+    assert out.exists()
+    assert not (out.parent / "job.yaml").exists()
 
 
 def test_task_snapshot_name_tracks_base_image_digest():
