@@ -111,5 +111,8 @@ digest = "sha256:3836353a5f1e64ef77fcd1e0018e9bfde1858cadad97be223885294aea16280
 
 [[files]]
 path = "SKILL.md"
-digest = "sha256:7abd5ed0fb0808c742a7b1d0fa40f4113d5c2469e9bc9666544034c6a2abe1b8"
+digest = "sha256:bb42ca12b6a31499d9fcf2bcd1309b98665581e245a70b96552c43c061822230"
 
+[[files]]
+path = ".python-version"
+digest = "sha256:7b55f8e67b5623c4bef3fa691288da9437d79d3aba156de48d481db32ac7d16d"
