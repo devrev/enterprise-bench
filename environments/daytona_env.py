@@ -17,9 +17,12 @@ rewritten to the configured GHCR image when building on Daytona.
 from __future__ import annotations
 
 import asyncio
+import functools
+import json
 import os
 import re
 import tempfile
+import urllib.request
 from pathlib import Path
 from typing import override
 
@@ -50,7 +53,45 @@ def conversational_base_image() -> str:
             "DaytonaEnvironment (GHCR conversational-base image)."
         )
     tag = os.environ.get("CONVERSATIONAL_BASE_TAG", "latest").strip() or "latest"
-    return f"ghcr.io/{owner.lower()}/conversational-base:{tag}"
+    repo = f"ghcr.io/{owner.lower()}/conversational-base"
+    digest = resolve_ghcr_digest(repo, tag)
+    # Daytona caches builds by Dockerfile text, so a moving tag such as
+    # ``latest`` can keep serving a stale image. Pinning the digest the tag
+    # points at now makes every push take effect on the next run.
+    return f"{repo}@{digest}" if digest else f"{repo}:{tag}"
+
+
+_MANIFEST_ACCEPT = ", ".join(
+    (
+        "application/vnd.oci.image.index.v1+json",
+        "application/vnd.docker.distribution.manifest.list.v2+json",
+        "application/vnd.oci.image.manifest.v1+json",
+        "application/vnd.docker.distribution.manifest.v2+json",
+    )
+)
+
+
+@functools.lru_cache(maxsize=None)
+def resolve_ghcr_digest(repo: str, tag: str, timeout: float = 10.0) -> str | None:
+    """Return the digest a public GHCR tag points at, or None if unavailable.
+
+    Cached per process so every trial in one job uses the same image.
+    """
+    name = repo.removeprefix("ghcr.io/")
+    try:
+        token_url = f"https://ghcr.io/token?scope=repository:{name}:pull"
+        with urllib.request.urlopen(token_url, timeout=timeout) as resp:
+            token = json.load(resp)["token"]
+        request = urllib.request.Request(
+            f"https://ghcr.io/v2/{name}/manifests/{tag}",
+            method="HEAD",
+            headers={"Authorization": f"Bearer {token}", "Accept": _MANIFEST_ACCEPT},
+        )
+        with urllib.request.urlopen(request, timeout=timeout) as resp:
+            digest = resp.headers.get("Docker-Content-Digest", "")
+    except Exception:
+        return None
+    return digest if re.fullmatch(r"sha256:[0-9a-f]{64}", digest) else None
 
 
 def rewrite_task_dockerfile(content: str, ghcr_image: str) -> str:
