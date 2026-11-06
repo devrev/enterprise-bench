@@ -18,6 +18,10 @@ results/
 /images/conversational-base/
 /mcp-servers/
 
+# Generated remote MCP config, preview-token file and deployment manifest
+# (mcp-servers/daytona/shared_mcp_daytona.py).
+/.daytona/
+
 # Env / secrets
 .env
 .env.*
