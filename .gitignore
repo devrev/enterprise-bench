@@ -17,6 +17,11 @@ results/
 /data/
 /images/conversational-base/
 /mcp-servers/
+/daytona/
+/environments/
+
+# Private Daytona deployment state and signed URLs
+/.daytona/
 
 # Env / secrets
 .env
