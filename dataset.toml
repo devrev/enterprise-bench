@@ -182,15 +182,15 @@ digest = "sha256:691858f003b456bca761435dc2c79242cae0dd50803c94282d92c479341d8de
 
 
 [[files]]
-path = "data.zip"
+path = "artifacts/data.zip"
 digest = "sha256:682ed699cf093202deecdea206c874d8aafc2978782d224958cc4cd872f34ece"
 
 [[files]]
-path = "base-image.zip"
+path = "artifacts/base-image.zip"
 digest = "sha256:8c96d4d341c55ca695c083bbc8c7d264641f8a1d93445fca8a425fd88d7af35e"
 
 [[files]]
-path = "mcp-servers.zip"
+path = "artifacts/mcp-servers.zip"
 digest = "sha256:8d79a70b1e6fd765e674476d961fa4c84a6f743946eebba89f29c449768c377a"
 
 [[files]]
@@ -210,7 +210,7 @@ path = "SKILL.md"
 digest = "sha256:490026337aa466e291c04276d0aaa6522dab45e5943c714a0f87bfe424deaf02"
 
 [[files]]
-path = "daytona.zip"
+path = "artifacts/daytona.zip"
 digest = "sha256:9bda6f61988dc7e13f4038b0252478016e085df9f83b048aadacc6ddf378e253"
 
 [[files]]
