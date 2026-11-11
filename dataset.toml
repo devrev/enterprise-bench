@@ -207,11 +207,11 @@ digest = "sha256:1cadfb42a6ca7b4ec405e379a2e60cc1a01135f5140b22c3bd027e926880f4f
 
 [[files]]
 path = "SKILL.md"
-digest = "sha256:e91c069de3481b004f89209c73f72af2bd14998591ebd6d10322a933bedaf9d5"
+digest = "sha256:fa2b9c60327f0b0cf36480c49b913b8864f4349a072115c87a39c9a3accba9e9"
 
 [[files]]
 path = "artifacts/daytona.zip"
-digest = "sha256:cfe54f4f6ae0fdb2b552d45d9f31fd2ddb44bef9a8fd052ec8778b83066b9a7f"
+digest = "sha256:35d0f77290c1a31586807b7b5b63afb528a091f1805fce32870ca3d01825f46c"
 
 [[files]]
 path = "setup_daytona.py"
