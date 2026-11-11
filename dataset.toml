@@ -223,7 +223,7 @@ digest = "sha256:8f3be9d50d2b723679a7576fa61404c8b2799149b30aff74a3652da8d3856fe
 
 [[files]]
 path = "README.md"
-digest = "sha256:558d323349cc580a5938da8c89394fb6116f9037c880b2d7a8edecba030ab8a0"
+digest = "sha256:1c4a65381b33b4186dac10d1e00abf4f78c0d600da2955e61516b6ed57bf731f"
 
 [[files]]
 path = "uv.lock"
