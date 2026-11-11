@@ -195,7 +195,7 @@ digest = "sha256:8d79a70b1e6fd765e674476d961fa4c84a6f743946eebba89f29c449768c377
 
 [[files]]
 path = "Makefile"
-digest = "sha256:8a12d84c1e1d6fe75aea700b2ff4d588f7e47e9a9a234fe61228d81dca274c46"
+digest = "sha256:cbda7bb6ac6c797bd9e3759b61935085887c97944c1de6aecf74492b0bdfadcb"
 
 [[files]]
 path = "pyproject.toml"
@@ -207,11 +207,11 @@ digest = "sha256:1cadfb42a6ca7b4ec405e379a2e60cc1a01135f5140b22c3bd027e926880f4f
 
 [[files]]
 path = "SKILL.md"
-digest = "sha256:490026337aa466e291c04276d0aaa6522dab45e5943c714a0f87bfe424deaf02"
+digest = "sha256:e91c069de3481b004f89209c73f72af2bd14998591ebd6d10322a933bedaf9d5"
 
 [[files]]
 path = "artifacts/daytona.zip"
-digest = "sha256:9bda6f61988dc7e13f4038b0252478016e085df9f83b048aadacc6ddf378e253"
+digest = "sha256:cfe54f4f6ae0fdb2b552d45d9f31fd2ddb44bef9a8fd052ec8778b83066b9a7f"
 
 [[files]]
 path = "setup_daytona.py"
@@ -223,7 +223,7 @@ digest = "sha256:8f3be9d50d2b723679a7576fa61404c8b2799149b30aff74a3652da8d3856fe
 
 [[files]]
 path = "README.md"
-digest = "sha256:6a1c55f84f04d78030cb3cd480b39f21f1d0a85ddd63eb6451a3ca0e61bacc60"
+digest = "sha256:0cecc1d81e1a21ba25af05e9fd5746d7daad4185d8bbf4f1b10f6fc469cf4a97"
 
 [[files]]
 path = "uv.lock"
