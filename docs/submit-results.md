@@ -38,7 +38,10 @@ To request leaderboard inclusion:
    `leaderboard/entries/<date>__<agent>__<model>.yaml`.
 4. Add the agent/model label, source job UUID, and public Harbor job URL above
    the row definition.
-5. Fill every required metadata and metric field from the completed run.
+5. Fill every required metadata and metric field from the completed run. The
+   cost fields are required too: if you can't determine the run's cost, set
+   `total_cost_usd: 0.0` and `display_total_cost_usd: "-"` and explain why in
+   the pull request.
 6. Open a pull request containing the new entry. Use one entry per pull request
    so each result can be reviewed independently.
 
