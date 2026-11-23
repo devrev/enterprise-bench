@@ -211,7 +211,7 @@ digest = "sha256:fa2b9c60327f0b0cf36480c49b913b8864f4349a072115c87a39c9a3accba9e
 
 [[files]]
 path = "artifacts/daytona.zip"
-digest = "sha256:35d0f77290c1a31586807b7b5b63afb528a091f1805fce32870ca3d01825f46c"
+digest = "sha256:c34027c2e11220d754c7a520a86ee6b897a077703df7af8eb2b861a965d915a0"
 
 [[files]]
 path = "setup_daytona.py"
