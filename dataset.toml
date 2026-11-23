@@ -191,7 +191,7 @@ digest = "sha256:8c96d4d341c55ca695c083bbc8c7d264641f8a1d93445fca8a425fd88d7af35
 
 [[files]]
 path = "artifacts/mcp-servers.zip"
-digest = "sha256:785877cd6af62fa609fd8249b7330bd31efc4e1f6134211c394395c1d4b9f22d"
+digest = "sha256:7fabe233087ff32ab256d9d2df27f16df4aa15e415d3d37447b5b2b69ad577a1"
 
 [[files]]
 path = "Makefile"
