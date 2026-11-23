@@ -1,5 +1,5 @@
 name: Task contribution
-about: Propose or submit a new benchmark task
+description: Propose or submit a new benchmark task
 title: "[task]: "
 labels: [task, contribution]
 body:

@@ -1,5 +1,5 @@
 name: Result submission
-about: Share a benchmark run for review or leaderboard inclusion
+description: Share a benchmark run for review or leaderboard inclusion
 title: "[result]: "
 labels: [results]
 body:
