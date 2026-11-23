@@ -191,7 +191,7 @@ digest = "sha256:8c96d4d341c55ca695c083bbc8c7d264641f8a1d93445fca8a425fd88d7af35
 
 [[files]]
 path = "artifacts/mcp-servers.zip"
-digest = "sha256:8d79a70b1e6fd765e674476d961fa4c84a6f743946eebba89f29c449768c377a"
+digest = "sha256:7fabe233087ff32ab256d9d2df27f16df4aa15e415d3d37447b5b2b69ad577a1"
 
 [[files]]
 path = "Makefile"
@@ -211,7 +211,7 @@ digest = "sha256:fa2b9c60327f0b0cf36480c49b913b8864f4349a072115c87a39c9a3accba9e
 
 [[files]]
 path = "artifacts/daytona.zip"
-digest = "sha256:35d0f77290c1a31586807b7b5b63afb528a091f1805fce32870ca3d01825f46c"
+digest = "sha256:c34027c2e11220d754c7a520a86ee6b897a077703df7af8eb2b861a965d915a0"
 
 [[files]]
 path = "setup_daytona.py"
