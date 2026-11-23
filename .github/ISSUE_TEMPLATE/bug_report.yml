@@ -1,5 +1,5 @@
 name: Bug report
-about: Report setup, runtime, or validation problems
+description: Report setup, runtime, or validation problems
 title: "[bug]: "
 labels: [bug]
 body:
