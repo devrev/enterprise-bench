@@ -17,7 +17,11 @@ What is verified per entry, from the page's embedded job record:
 
   1. The job exists and is publicly visible (HTTP 200, visibility == "public").
   2. n_trials equals the job's recorded trial count.
-  3. accuracy matches the job's recorded average reward.
+  3. accuracy, reconciled via implied passing-trial counts (the Hub's
+     recorded average reward covers only trials that carry a reward, and that
+     count is not exposed; the entry convention scores unscored trials 0 and
+     keeps them in the denominator — see leaderboard.yaml's metric
+     definitions).
   4. The token breakdown and cost match the job's recorded usage.
   5. Cohort shape: recorded attempts per task and total trials match the
      expected cohort configured in leaderboard.yaml (provenance.cohort).
@@ -92,7 +96,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "cohort": {"tasks": 42, "attempts": 5, "trials": 210},
     },
     "tolerances": {
-        "accuracy": 0.05,  # percentage points
+        "passes": 2,  # max |implied passing trials difference| (see below)
         "tokens_pct": 0.5,  # percent
         "cost_pct": 0.5,  # percent
     },
@@ -277,11 +281,7 @@ def check_metric(
     """Record a mismatch as an error; a missing side stays silent."""
     if actual is None or expected is None:
         return
-    if tolerance == "points":
-        within = abs(actual - expected) <= config["tolerances"]["accuracy"]
-    else:
-        within = _pct_diff(actual, expected) <= config["tolerances"][tolerance]
-    if not within:
+    if _pct_diff(actual, expected) > config["tolerances"][tolerance]:
         findings.append(
             {
                 "level": "error",
@@ -502,20 +502,41 @@ def verify_entry(
             )
 
     # 3. Accuracy vs the job's recorded average reward.
+    #
+    # Hub's job-level avg_reward averages only the trials that carry a
+    # recorded reward, and that count is not exposed anywhere on the page
+    # (the GLM job: 50/209 vs the entry's 50/210, with 210 visible counters).
+    # Comparing percentages directly therefore flags correct entries. The
+    # stable quantity on both sides is the number of PASSING trials, so
+    # compare implied pass counts, tolerating the unexposed unscored gap.
     stats = _mapping(job.get("stats"))
     avg_reward = _as_number(stats.get("avg_reward"))
-    for row in rows:
-        accuracy = _as_number(row.get("metrics", {}).get("accuracy"))
-        if avg_reward is not None and accuracy is not None:
-            check_metric(
-                findings,
-                "accuracy",
-                "accuracy",
-                accuracy,
-                avg_reward * 100.0,
-                "points",
-                config,
+    if avg_reward is not None and n_total is not None:
+        hub_passes = avg_reward * n_total
+        entry_passes = 0.0
+        have_entry_passes = False
+        for row in rows:
+            accuracy = _as_number(row["metrics"].get("accuracy"))
+            row_trials = _as_number(row["metrics"].get("n_trials"))
+            if accuracy is not None and row_trials is not None:
+                entry_passes += accuracy * row_trials / 100.0
+                have_entry_passes = True
+        if have_entry_passes:
+            tolerance = max(
+                float(config["tolerances"]["passes"]), 0.01 * n_total
             )
+            if abs(entry_passes - hub_passes) > tolerance:
+                findings.append(
+                    {
+                        "level": "error" if changed else "warn",
+                        "check": "accuracy",
+                        "message": f"the entry implies {entry_passes:.2f} passing "
+                        f"trials but the job records {hub_passes:.2f} "
+                        f"(avg reward {avg_reward} over its scored trials); "
+                        "allowed difference is "
+                        f"{tolerance:.2f} trials",
+                    }
+                )
 
     # 4. Token breakdown and cost vs the job's recorded usage.
     job_input = _as_number(job.get("input_tokens"))
