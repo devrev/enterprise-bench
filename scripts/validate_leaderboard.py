@@ -20,10 +20,16 @@ only what is expressed in the committed files:
 The metrics contract is read from leaderboard/leaderboard.yaml (metrics_schema)
 so this validator and the Harbor Hub leaderboard config share one source of
 truth. Run via `make validate-leaderboard` or as part of `make validate`.
+
+CI runs this script from the base branch and points --entries-dir at the PR's
+entries, so a pull request cannot weaken or bypass the check by editing this
+file (the provenance stage that contacts the Hub lives in
+scripts/validate_provenance.py).
 """
 
 from __future__ import annotations
 
+import argparse
 import re
 from pathlib import Path
 from typing import Any
@@ -268,20 +274,42 @@ def validate_entry(
             fail(errors, entry, f"status must be 'display' or 'hide', got {status!r}")
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Validate leaderboard submission entries for Enterprise-Bench."
+    )
+    parser.add_argument(
+        "--entries-dir",
+        type=Path,
+        default=None,
+        help="Directory containing the entry YAML files to validate. "
+        "Defaults to leaderboard/entries in this repository. CI validates the "
+        "PR checkout's entries with the trusted base-branch copy of this "
+        "script by passing the PR path here.",
+    )
+    args = parser.parse_args(argv)
+    if args.entries_dir is None:
+        entries_dir = ENTRIES_DIR
+    else:
+        entries_dir = args.entries_dir.expanduser().resolve()
     errors: list[str] = []
 
-    if not ENTRIES_DIR.exists():
-        print(f"Leaderboard validation failed: missing {ENTRIES_DIR.relative_to(ROOT)}")
+    try:
+        shown_dir = entries_dir.relative_to(ROOT)
+    except ValueError:
+        shown_dir = entries_dir
+
+    if not entries_dir.exists():
+        print(f"Leaderboard validation failed: missing {shown_dir}")
         return 1
 
     schema = load_metrics_schema(errors)
 
     entry_paths = sorted(
-        p for p in ENTRIES_DIR.glob("*.yaml") if p.name != TEMPLATE_PATH.name
+        p for p in entries_dir.glob("*.yaml") if p.name != TEMPLATE_PATH.name
     )
     if not entry_paths:
-        print("Leaderboard validation: no entries found (nothing to check).")
+        print(f"Leaderboard validation: no entries found in {shown_dir} (nothing to check).")
         return 0
 
     seen_trials: dict[str, str] = {}

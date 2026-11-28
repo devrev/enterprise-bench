@@ -1,26 +1,43 @@
 name: Leaderboard
 
 # Runs only when a PR touches leaderboard submissions, the leaderboard schema,
-# or the validator itself — so unrelated PRs (tasks, docs, setup) don't trigger
-# the leaderboard submission check.
+# or the validators themselves — so unrelated PRs (tasks, docs, setup) don't
+# trigger the leaderboard submission check.
 on:
   pull_request:
     paths:
       - 'leaderboard/entries/**'
       - 'leaderboard/leaderboard.yaml'
       - 'scripts/validate_leaderboard.py'
+      - 'scripts/validate_provenance.py'
   push:
     branches: [main]
     paths:
       - 'leaderboard/entries/**'
       - 'leaderboard/leaderboard.yaml'
       - 'scripts/validate_leaderboard.py'
+      - 'scripts/validate_provenance.py'
+
+# Read-only: the checks never push, and PR events get no secrets anyway.
+permissions:
+  contents: read
 
 jobs:
   validate-leaderboard:
     runs-on: ubuntu-latest
     steps:
+      # Run the TRUSTED base-branch copy of the validator and its uv.lock: the
+      # PR checkout is used as data only, so a PR cannot weaken or bypass this
+      # check by editing scripts/validate_leaderboard.py (issue #168).
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.ref }}
+      # The PR's leaderboard files, checked out as data.
+      - uses: actions/checkout@v4
+        if: github.event_name == 'pull_request'
+        with:
+          ref: 'refs/pull/${{ github.event.pull_request.number }}/merge'
+          path: pr
       - name: Install uv
         uses: astral-sh/setup-uv@v5
       - name: Set up Python
@@ -29,5 +46,102 @@ jobs:
           python-version: '3.12'
       - name: Install dependencies
         run: uv sync --extra dev --frozen
+      - name: Check validator capability on the base branch
+        id: capability
+        if: github.event_name == 'pull_request'
+        run: |
+          if uv run python scripts/validate_leaderboard.py --help 2>/dev/null \
+              | grep -q -- --entries-dir; then
+            echo "trusted=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "trusted=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::The base branch does not support --entries-dir yet. \
+          Falling back to validating the PR checkout directly (the pre-existing \
+          behavior). This job automatically switches to the trusted base-branch \
+          validator once the validator changes merge."
+          fi
+      - name: Validate leaderboard submissions (PR entries, trusted validator)
+        if: github.event_name == 'pull_request' && steps.capability.outputs.trusted == 'true'
+        run: make validate-leaderboard ENTRIES=./pr/leaderboard/entries
+      - name: Validate leaderboard submissions (legacy fallback)
+        if: github.event_name == 'pull_request' && steps.capability.outputs.trusted == 'false'
+        run: cd pr && make validate-leaderboard
       - name: Validate leaderboard submissions
+        if: github.event_name != 'pull_request'
         run: make validate-leaderboard
+
+  provenance:
+    runs-on: ubuntu-latest
+    steps:
+      # Same trust boundary as above: base-branch code, PR files as data.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.ref }}
+      - uses: actions/checkout@v4
+        if: github.event_name == 'pull_request'
+        with:
+          ref: 'refs/pull/${{ github.event.pull_request.number }}/merge'
+          path: pr
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: uv sync --extra dev --frozen
+      - name: Check base branch readiness
+        id: ready
+        run: |
+          if [ -f scripts/validate_provenance.py ] && \
+             uv run python scripts/validate_leaderboard.py --help 2>/dev/null \
+               | grep -q -- --entries-dir; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::The base branch does not include the provenance \
+          stage yet. This job activates automatically once the validator \
+          changes merge."
+          fi
+      - name: List changed entries
+        id: changed
+        if: github.event_name == 'pull_request' && steps.ready.outputs.ready == 'true'
+        run: |
+          set -euo pipefail
+          cd pr
+          # Tree-diff the PR against the base branch tip. NUL-delimited output
+          # survives every byte a valid filename may contain (spaces, quotes,
+          # commas, newlines). Detection failing closed is intentional: an
+          # incomplete changed-entry list would downgrade strict checks.
+          git fetch --depth=1 origin "refs/heads/${{ github.event.pull_request.base.ref }}" || true
+          if git rev-parse -q --verify FETCH_HEAD >/dev/null 2>&1; then
+            base_tip=FETCH_HEAD
+          else
+            base_tip="${{ github.event.pull_request.base.sha }}"
+          fi
+          if ! git cat-file -e "${base_tip}^{commit}" 2>/dev/null; then
+            echo "::error::Could not resolve the base revision for the changed-entry diff."
+            exit 1
+          fi
+          git diff --name-only -z "$base_tip" HEAD -- leaderboard/entries \
+            > "$RUNNER_TEMP/changed-entries.bin"
+      - name: Verify entry provenance against the public Harbor Hub
+        if: steps.ready.outputs.ready == 'true'
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            if [ -s "$RUNNER_TEMP/changed-entries.bin" ]; then
+              # Strict for entries this PR adds or changes; names are passed
+              # via a NUL-delimited file, never interpolated into the shell.
+              uv run python scripts/validate_provenance.py \
+                --entries-dir ./pr/leaderboard/entries \
+                --changed-from "$RUNNER_TEMP/changed-entries.bin"
+            else
+              # No entry changes: legacy rows stay warn-only.
+              uv run python scripts/validate_provenance.py \
+                --entries-dir ./pr/leaderboard/entries --legacy
+            fi
+          else
+            # Post-merge sweep of main: informational, warn-only for every row.
+            uv run python scripts/validate_provenance.py --legacy
+          fi
